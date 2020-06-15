@@ -104,8 +104,10 @@ public class StringUtilTest {
         assertEquals("ftp://example.com/one/two.c", resolve("ftp://example.com/one/", "two.c"));
     }
 
-    @Test public void cachedStringBuilderPerf() throws InterruptedException {
-        int nthreads = 32;
+    private void cachedStringBuilderPerfInner(int nthreads) throws InterruptedException {
+        System.out.println("------------------");
+        System.out.println("threads = " + nthreads);
+        System.out.println("------------------");
         ExecutorService exec = Executors.newFixedThreadPool(nthreads);
         for (int t = 0; t < nthreads; t++) {
             exec.execute(() -> {
@@ -145,5 +147,10 @@ public class StringUtilTest {
         }
         exec.shutdown();
         exec.awaitTermination(60, TimeUnit.SECONDS);
+    }
+
+    @Test public void cachedStringBuilderPerf() throws InterruptedException {
+        cachedStringBuilderPerfInner(8);
+        cachedStringBuilderPerfInner(32);
     }
 }
