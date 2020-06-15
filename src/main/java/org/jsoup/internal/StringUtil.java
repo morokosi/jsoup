@@ -271,6 +271,51 @@ public final class StringUtil {
         return string;
     }
 
+    private static final ThreadLocal<Stack<StringBuilder>> tlBuilders = new ThreadLocal<Stack<StringBuilder>>() {
+        @Override
+        protected Stack<StringBuilder> initialValue() {
+            return new Stack<>();
+        }
+    };
+
+    /**
+     * Maintains cached StringBuilders in a flyweight pattern, to minimize new StringBuilder GCs. The StringBuilder is
+     * prevented from growing too large.
+     * <p>
+     * Care must be taken to release the builder once its work has been completed, with {@link #releaseBuilder}
+     * @return an empty StringBuilder
+     */
+    public static StringBuilder tlBorrowBuilder() {
+        Stack<StringBuilder> builders = tlBuilders.get();
+        return builders.empty() ?
+            new StringBuilder(MaxCachedBuilderSize) :
+            builders.pop();
+    }
+
+    /**
+     * Release a borrowed builder. Care must be taken not to use the builder after it has been returned, as its
+     * contents may be changed by this method, or by a concurrent thread.
+     * @param sb the StringBuilder to release.
+     * @return the string value of the released String Builder (as an incentive to release it!).
+     */
+    public static String tlReleaseBuilder(StringBuilder sb) {
+        Validate.notNull(sb);
+        String string = sb.toString();
+
+        if (sb.length() > MaxCachedBuilderSize)
+            sb = new StringBuilder(MaxCachedBuilderSize); // make sure it hasn't grown too big
+        else
+            sb.delete(0, sb.length()); // make sure it's emptied on release
+
+        Stack<StringBuilder> builders = tlBuilders.get();
+        builders.push(sb);
+
+        while (builders.size() > MaxIdleBuilders) {
+            builders.pop();
+        }
+        return string;
+    }
+
     private static final int MaxCachedBuilderSize = 8 * 1024;
     private static final int MaxIdleBuilders = 8;
 }

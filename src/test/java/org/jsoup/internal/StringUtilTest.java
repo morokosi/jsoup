@@ -1,10 +1,13 @@
 package org.jsoup.internal;
 
+import java.util.concurrent.TimeUnit;
 import org.jsoup.Jsoup;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import static org.jsoup.internal.StringUtil.normaliseWhitespace;
 import static org.jsoup.internal.StringUtil.resolve;
@@ -99,5 +102,48 @@ public class StringUtilTest {
         assertEquals("ftp://example.com/one", resolve("ftp://example.com/two/", "../one"));
         assertEquals("ftp://example.com/one/two.c", resolve("ftp://example.com/one/", "./two.c"));
         assertEquals("ftp://example.com/one/two.c", resolve("ftp://example.com/one/", "two.c"));
+    }
+
+    @Test public void cachedStringBuilderPerf() throws InterruptedException {
+        int nthreads = 32;
+        ExecutorService exec = Executors.newFixedThreadPool(nthreads);
+        for (int t = 0; t < nthreads; t++) {
+            exec.execute(() -> {
+                // warmup
+                for (int i = 0; i < 1000000; i++) {
+                    StringBuilder sb = StringUtil.borrowBuilder();
+                    StringUtil.releaseBuilder(sb);
+                }
+                long time = System.currentTimeMillis();
+                // test
+                for (int i = 0; i < 1000000; i++) {
+                    StringBuilder sb = StringUtil.borrowBuilder();
+                    StringUtil.releaseBuilder(sb);
+                }
+                System.out.println("elapsed: " + (System.currentTimeMillis() - time) + "ms");
+            });
+        }
+        exec.shutdown();
+        exec.awaitTermination(60, TimeUnit.SECONDS);
+        System.out.println("------------------");
+        exec = Executors.newFixedThreadPool(nthreads);
+        for (int t = 0; t < nthreads; t++) {
+            exec.execute(() -> {
+                // warmup
+                for (int i = 0; i < 1000000; i++) {
+                    StringBuilder sb = StringUtil.tlBorrowBuilder();
+                    StringUtil.tlReleaseBuilder(sb);
+                }
+                long time = System.currentTimeMillis();
+                // test
+                for (int i = 0; i < 1000000; i++) {
+                    StringBuilder sb = StringUtil.tlBorrowBuilder();
+                    StringUtil.tlReleaseBuilder(sb);
+                }
+                System.out.println("elapsed: " + (System.currentTimeMillis() - time) + "ms");
+            });
+        }
+        exec.shutdown();
+        exec.awaitTermination(60, TimeUnit.SECONDS);
     }
 }
